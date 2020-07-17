@@ -9,6 +9,7 @@ package com.vesoft.nebula.tools.importer
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import java.io.File
 import java.util.concurrent.{Executors, TimeUnit}
+import java.util.Date
 
 import com.google.common.base.Optional
 import com.google.common.net.HostAndPort
@@ -82,6 +83,10 @@ object SparkImporter {
       session.getOrCreate()
     }
 
+    def getTimeSecond() = (new Date().getTime)/1000
+
+    val startTime = getTimeSecond()
+
     // reload the execution sentence
     if (!c.reload.isEmpty) {
       val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.reload")
@@ -136,6 +141,7 @@ object SparkImporter {
       sys.exit(0)
     }
 
+    val tagStartTime = getTimeSecond()
     if (!configs.tagsConfig.isEmpty) {
       for (tagConfig <- configs.tagsConfig) {
         LOG.info(s"Processing Tag ${tagConfig.name}")
@@ -164,6 +170,8 @@ object SparkImporter {
       LOG.warn("Tag is not defined")
     }
 
+    println(s"write vertex use time ${getTimeSecond()-tagStartTime}s")
+    val edgeStartTime = getTimeSecond()
     if (!configs.edgesConfig.isEmpty) {
       for (edgeConfig <- configs.edgesConfig) {
         LOG.info(s"Processing Edge ${edgeConfig.name}")
@@ -189,6 +197,8 @@ object SparkImporter {
         }
       }
     }
+    println(s"write edge use ${getTimeSecond()-edgeStartTime}s")
+    println(s"total use ${getTimeSecond()-startTime}s")
     spark.close()
   }
 
@@ -250,7 +260,8 @@ object SparkImporter {
       }
       case SourceCategory.NEO4J =>
         val neo4jConfig = config.asInstanceOf[Neo4JSourceConfigEntry]
-        val reader      = new Neo4JReader(session, neo4jConfig.offset, neo4jConfig.exec)
+        val reader =
+          new Neo4JReader(session, neo4jConfig.partition, neo4jConfig.batchSize, neo4jConfig.exec)
         Some(reader.read())
       case _ => {
         LOG.error(s"Data source ${config.category} not supported")
@@ -334,8 +345,8 @@ object SparkImporter {
     }
 
     // judge neo4j partition must eq 1
-    if (tagNeo4jConfig.exists(_.partition != 1) || edgeNeo4jConfig.exists(_.partition != 1))
-      throw new IllegalArgumentException("neo4j's partition must be 1.")
+//    if (tagNeo4jConfig.exists(_.partition != 1) || edgeNeo4jConfig.exists(_.partition != 1))
+//      throw new IllegalArgumentException("neo4j's partition must be 1.")
 
     sparkConf
   }

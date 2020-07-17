@@ -82,11 +82,11 @@ class MySQLReader(override val session: SparkSession,
   * @param session
   * @param sentence
   */
-class Neo4JReader(override val session: SparkSession, offset: Long, sentence: String)
+class Neo4JReader(override val session: SparkSession, partition:Int, batchSize:Int, sentence: String)
     extends ServerBaseReader(session, sentence) {
   override def read(): DataFrame = {
     val neo = Neo4j(session.sparkContext)
-    neo.cypher(if (offset <= 0) sentence else sentence + s" SKIP ${offset}").loadDataFrame
+    neo.cypher(sentence+" SKIP $_skip LIMIT $_limit").partitions(partition).batch(batchSize).loadDataFrame
   }
 }
 

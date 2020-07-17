@@ -190,14 +190,14 @@ case class Neo4JSourceConfigEntry(override val category: SourceCategory.Value,
                                   user: String,
                                   password: String,
                                   encryption: Boolean,
-                                  offset: Long)
+                                  partition: Int,
+                                  batchSize: Int)
     extends DataSourceConfigEntry {
-  require(
-    exec.trim.length != 0 && offset >= 0 && user.trim.length != 0 && password.trim.length != 0)
+  require(exec.trim.length != 0 && user.trim.length != 0 && password.trim.length != 0)
 
   override def toString: String = {
     s"Neo4J source address: ${server}, user: ${user}, password: ${password}, encryption: ${encryption}," +
-      s" offset: ${offset}, exec: ${exec}"
+      s" exec: ${exec}"
   }
 }
 
@@ -708,16 +708,20 @@ object Configs {
       case SourceCategory.HIVE =>
         HiveSourceConfigEntry(SourceCategory.HIVE, config.getString("exec"))
       case SourceCategory.NEO4J =>
-        val offset = if (config.hasPath("offset")) config.getLong("offset") else 0L
+        val partition = if (config.hasPath("partition")) config.getInt("partition") else 1
         val encryption =
           if (config.hasPath("encryption")) config.getBoolean("encryption") else false
-        Neo4JSourceConfigEntry(SourceCategory.NEO4J,
-                               config.getString("exec"),
-                               config.getString("server"),
-                               config.getString("user"),
-                               config.getString("password"),
-                               encryption,
-                               offset)
+        val batch = getOrElse(config, "batch", DEFAULT_BATCH)
+        Neo4JSourceConfigEntry(
+          SourceCategory.NEO4J,
+          config.getString("exec"),
+          config.getString("server"),
+          config.getString("user"),
+          config.getString("password"),
+          encryption,
+          partition,
+          batch
+        )
       case SourceCategory.JANUS_GRAPH =>
         JanusGraphSourceConfigEntry(SourceCategory.JANUS_GRAPH)
       case SourceCategory.SOCKET =>
