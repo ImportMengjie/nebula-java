@@ -252,7 +252,7 @@ object SparkImporter {
       }
       case SourceCategory.NEO4J =>
         val neo4jConfig = config.asInstanceOf[Neo4JSourceConfigEntry]
-        val reader      = new Neo4JReader(session, neo4jConfig.offset, neo4jConfig.exec)
+        val reader      = new Neo4JReader(session, 10, neo4jConfig.exec)
         Some(reader.read())
       case _ => {
         LOG.error(s"Data source ${config.category} not supported")
@@ -334,10 +334,6 @@ object SparkImporter {
       sparkConf.set("spark.neo4j.password", dataSourceConfig.head._3)
       sparkConf.set("spark.neo4j.encryption", dataSourceConfig.head._4)
     }
-
-    // judge neo4j partition must eq 1
-    if (tagNeo4jConfig.exists(_.partition != 1) || edgeNeo4jConfig.exists(_.partition != 1))
-      throw new IllegalArgumentException("neo4j's partition must be 1.")
 
     sparkConf
   }
