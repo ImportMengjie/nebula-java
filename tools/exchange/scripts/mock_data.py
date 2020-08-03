@@ -226,7 +226,7 @@ if __name__ == '__main__':
             ), 'idTo '+schema['idTo']['sql'].upper()])+list(map(lambda k, t: k+" "+t['sql'].upper(), schema['property'].keys(), schema['property'].values()))))
             statements.append(create_statement)
 
-            for i in range(0, len(v['data'])//batch_size+(0 if len(v['data'])%batch_size==0 else 1)):
+            for i in range(0, len(e['data'])//batch_size+(0 if len(e['data'])%batch_size==0 else 1)):
                 batch_data = e['data'][i*batch_size:(i+1)*batch_size]
                 insert_statement = "insert into {} values {}".format(name, ",".join(map(lambda x:'('+",".join([str(list(x['from']['match'].values())[0]), str(list(x['to']['match'].values())[0])]+list(map(value2str,x['data'].values())))+')', batch_data)))
                 statements.append(insert_statement)
