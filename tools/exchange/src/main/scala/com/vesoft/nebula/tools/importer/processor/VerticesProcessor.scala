@@ -49,7 +49,7 @@ class VerticesProcessor(data: DataFrame,
                         batchFailure: LongAccumulator)
     extends Processor {
 
-  @transient lazy val LOG = Logger.getLogger(this.getClass)
+  @transient private[this] lazy val LOG = Logger.getLogger(this.getClass)
 
   private def processEachPartition(iterator: Iterator[Vertex]): Unit = {
     val partitionId = TaskContext.getPartitionId()
@@ -76,25 +76,13 @@ class VerticesProcessor(data: DataFrame,
         breakPointVerticesCount += vertices.values.length
 
         if (futures.size == 100) { // TODO configurable ?
-
-          val pathAndOffset =
-            if (tagConfig.dataSourceConfigEntry.category == SourceCategory.NEO4J &&
-                tagConfig.checkPointPath.isDefined) {
-              val path   = s"${tagConfig.checkPointPath.get}/${tagConfig.name}.${partitionId}"
-              val offset = breakPointVerticesCount + fetchOffset(path)
-              Some((path, offset))
-            } else {
-              None
-            }
+          waitingFuturesFinish(futures,
+                               service,
+                               tagConfig,
+                               breakPointVerticesCount,
+                               batchSuccess,
+                               batchFailure)
           breakPointVerticesCount = 0L
-          val latch      = new CountDownLatch(100)
-          val allFutures = Futures.allAsList(futures: _*)
-          Futures.addCallback(
-            allFutures,
-            new NebulaWriterCallback(latch, batchSuccess, batchFailure, pathAndOffset),
-            service)
-          latch.await()
-          futures.clear()
         }
       } else {
         batchFailure.add(1)
@@ -102,37 +90,25 @@ class VerticesProcessor(data: DataFrame,
         if (errorBuffer.size == config.errorConfig.errorMaxSize) {
           throw TooManyErrorsException(s"Too Many Errors ${config.errorConfig.errorMaxSize}")
         }
-        if (tagConfig.dataSourceConfigEntry.category == SourceCategory.NEO4J &&
-            tagConfig.checkPointPath.isDefined) {
+        if (tagConfig.dataSourceConfigEntry.resume && tagConfig.checkPointPath.isDefined) {
           throw new RuntimeException(s"Write tag ${tagConfig.name} errors")
         }
       }
 
-      if (!errorBuffer.isEmpty) {
+      if (errorBuffer.nonEmpty) {
         ErrorHandler.save(errorBuffer, s"${config.errorConfig.errorPath}/${tagConfig.name}")
         errorBuffer.clear()
       }
     }
 
-    if (!futures.isEmpty) {
-      val pathAndOffset =
-        if (tagConfig.dataSourceConfigEntry.category == SourceCategory.NEO4J &&
-            tagConfig.checkPointPath.isDefined) {
-          val path   = s"${tagConfig.checkPointPath.get}/${tagConfig.name}.${partitionId}"
-          val offset = breakPointVerticesCount + fetchOffset(path)
-          Some((path, offset))
-        } else {
-          None
-        }
-
+    if (futures.nonEmpty) {
+      waitingFuturesFinish(futures,
+                           service,
+                           tagConfig,
+                           breakPointVerticesCount,
+                           batchSuccess,
+                           batchFailure)
       breakPointVerticesCount = 0L
-      val latch      = new CountDownLatch(futures.size)
-      val allFutures = Futures.allAsList(futures: _*)
-      Futures.addCallback(
-        allFutures,
-        new NebulaWriterCallback(latch, batchSuccess, batchFailure, pathAndOffset),
-        service)
-      latch.await()
     }
     service.shutdown()
     while (!service.awaitTermination(100, TimeUnit.MILLISECONDS)) {
