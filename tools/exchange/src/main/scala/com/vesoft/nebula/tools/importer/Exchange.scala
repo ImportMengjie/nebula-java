@@ -81,6 +81,7 @@ object Exchange {
     } else {
       session.getOrCreate()
     }
+    spark.sparkContext.setLogLevel("info")
 
     // reload the execution sentence
     if (!c.reload.isEmpty) {
